@@ -1,4 +1,5 @@
-# Leads API – Real Estate CRM Backend
+Real Estate Lead Automation API
+Python | Flask | JWT | SQLAlchemy
 
 REST API built with Flask for managing and scoring real estate leads.
 
