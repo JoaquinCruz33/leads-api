@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<title>Real Estate CRM</title>
+<button onclick="exportLeads()">📥 Export Leads to Excel</button>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f5f5f5;
+margin:20px;
+}
+
+.stats{
+display:flex;
+gap:20px;
+margin-bottom:20px;
+flex-wrap:wrap;
+}
+
+.stat{
+background:white;
+padding:15px;
+border-radius:8px;
+box-shadow:0 2px 5px rgba(0,0,0,0.1);
+min-width:150px;
+}
+
+.pipeline{
+display:flex;
+gap:20px;
+margin-top:20px;
+}
+
+.column{
+flex:1;
+background:#eee;
+padding:10px;
+border-radius:8px;
+min-height:400px;
+}
+
+.card{
+background:white;
+padding:10px;
+margin-bottom:10px;
+border-radius:5px;
+cursor:grab;
+}
+
+.hot{
+border-left:6px solid red;
+}
+
+.warm{
+border-left:6px solid orange;
+}
+
+.cold{
+border-left:6px solid blue;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>Real Estate CRM</h2>
+
+<h3>Create Lead</h3>
+
+<input id="name" placeholder="Name">
+<input id="email" placeholder="Email">
+<input id="phone" placeholder="Phone">
+<input id="intent" placeholder="Intent (buyer/seller/investor)">
+<input id="budget" placeholder="Budget">
+<input id="timeline" placeholder="Timeline (immediate / 1-3 months / 6+ months)">
+
+<button onclick="createLead()">Create Lead</button>
+
+<hr>
+
+<div class="stats">
+
+<div class="stat">
+🔥 Hot Leads: <span id="hotCount">0</span>
+</div>
+
+<div class="stat">
+🟡 Warm Leads: <span id="warmCount">0</span>
+</div>
+
+<div class="stat">
+🔵 Cold Leads: <span id="coldCount">0</span>
+</div>
+
+<div class="stat">
+💰 Pipeline Revenue: $<span id="revenue">0</span>
+</div>
+
+<div class="stat">
+📊 Conversion Rate: <span id="conversion">0%</span>
+</div>
+
+</div>
+
+<h3>Sales Analytics</h3>
+
+<canvas id="leadsChart" height="100"></canvas>
+
+<div class="pipeline">
+
+<div class="column" ondrop="drop(event,'New')" ondragover="allowDrop(event)">
+<h3>New</h3>
+<div id="New"></div>
+</div>
+
+<div class="column" ondrop="drop(event,'Contacted')" ondragover="allowDrop(event)">
+<h3>Contacted</h3>
+<div id="Contacted"></div>
+</div>
+
+<div class="column" ondrop="drop(event,'Visit')" ondragover="allowDrop(event)">
+<h3>Visit</h3>
+<div id="Visit"></div>
+</div>
+
+<div class="column" ondrop="drop(event,'Closed')" ondragover="allowDrop(event)">
+<h3>Closed</h3>
+<div id="Closed"></div>
+</div>
+
+</div>
+
+<script>
+
+let leadsData=[]
+let chart=null
+
+async function loadLeads(){
+
+const token=localStorage.getItem("access_token")
+
+const res=await fetch("http://localhost:5000/leads",{
+headers:{
+"Authorization":"Bearer "+token
+}
+})
+
+const leads=await res.json()
+
+leadsData=leads
+
+document.getElementById("New").innerHTML=""
+document.getElementById("Contacted").innerHTML=""
+document.getElementById("Visit").innerHTML=""
+document.getElementById("Closed").innerHTML=""
+
+let hot=0
+let warm=0
+let cold=0
+let revenue=0
+let closed=0
+
+leads.forEach(lead=>{
+
+const commission=0.03
+revenue += lead.budget * commission
+
+if(lead.status=="Closed"){
+closed++
+}
+
+let priorityClass=""
+
+if(lead.priority=="Hot"){
+priorityClass="hot"
+hot++
+}
+
+else if(lead.priority=="Warm"){
+priorityClass="warm"
+warm++
+}
+
+else{
+priorityClass="cold"
+cold++
+}
+
+const card=`
+<div class="card ${priorityClass}" draggable="true" ondragstart="drag(event)" id="lead${lead.id}">
+<b>${lead.name}</b><br>
+${lead.email}<br>
+Budget: $${lead.budget}<br>
+Priority: ${lead.priority}
+</div>
+`
+
+const column=lead.status || "New"
+
+document.getElementById(column).innerHTML+=card
+
+})
+
+document.getElementById("hotCount").innerText=hot
+document.getElementById("warmCount").innerText=warm
+document.getElementById("coldCount").innerText=cold
+document.getElementById("revenue").innerText=revenue.toLocaleString()
+
+let conversionRate=0
+
+if(leads.length>0){
+conversionRate = Math.round((closed/leads.length)*100)
+}
+
+document.getElementById("conversion").innerText=conversionRate+"%"
+
+loadChart()
+
+}
+
+function allowDrop(ev){
+ev.preventDefault()
+}
+
+function drag(ev){
+ev.dataTransfer.setData("text",ev.target.id)
+}
+
+async function drop(ev,status){
+
+ev.preventDefault()
+
+const data=ev.dataTransfer.getData("text")
+
+const leadId=data.replace("lead","")
+
+const token=localStorage.getItem("access_token")
+
+await fetch("http://localhost:5000/leads/update/"+leadId,{
+method:"PATCH",
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer "+token
+},
+body:JSON.stringify({
+status:status
+})
+})
+
+loadLeads()
+
+}
+
+async function createLead(){
+
+const token = localStorage.getItem("access_token")
+
+const lead = {
+name: document.getElementById("name").value,
+email: document.getElementById("email").value,
+phone: document.getElementById("phone").value,
+intent: document.getElementById("intent").value,
+budget: parseInt(document.getElementById("budget").value),
+timeline: document.getElementById("timeline").value
+}
+
+const res = await fetch("http://localhost:5000/leads",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer "+token
+},
+body:JSON.stringify(lead)
+})
+
+const data = await res.json()
+
+alert("Lead created! Priority: " + data.priority)
+
+loadLeads()
+
+}
+
+function loadChart(){
+
+let hot=0
+let warm=0
+let cold=0
+
+leadsData.forEach(lead=>{
+
+if(lead.priority=="Hot"){
+hot++
+}
+
+else if(lead.priority=="Warm"){
+warm++
+}
+
+else{
+cold++
+}
+
+})
+
+const ctx=document.getElementById('leadsChart')
+
+if(chart){
+chart.destroy()
+}
+
+chart=new Chart(ctx,{
+type:'bar',
+data:{
+labels:['Hot','Warm','Cold'],
+datasets:[{
+label:'Leads',
+data:[hot,warm,cold]
+}]
+}
+})
+
+}
+
+loadLeads()
+
+function exportLeads(){
+
+const token = localStorage.getItem("access_token")
+
+window.open("http://localhost:5000/export?token="+token)
+
+}
+
+</script>
+
+</body>
+</html>

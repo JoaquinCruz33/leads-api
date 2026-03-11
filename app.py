@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file 
+import pandas as pd
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
+from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager,
     create_access_token,
@@ -8,10 +10,16 @@ from flask_jwt_extended import (
     get_jwt_identity
 )
 
+
 from werkzeug.security import generate_password_hash, check_password_hash
 from lead_scoring import calculate_lead_score
+from automation import handle_hot_lead
+from whatsapp import send_whatsapp
 
 app = Flask(__name__)
+
+# ACTIVAR CORS
+CORS(app)
 
 # DATABASE
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///leads.db"
@@ -39,22 +47,21 @@ class User(db.Model):
 
 
 class Lead(db.Model):
+
     id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+
     name = db.Column(db.String(100))
     email = db.Column(db.String(100))
-    phone = db.Column(db.String(20))
-    intent = db.Column(db.String(20))
+    phone = db.Column(db.String(50))
+    intent = db.Column(db.String(50))
     budget = db.Column(db.Integer)
     timeline = db.Column(db.String(50))
+
     score = db.Column(db.Integer)
     priority = db.Column(db.String(20))
-
     status = db.Column(db.String(50), default="New")
-    source = db.Column(db.String(50))
-    assigned_agent = db.Column(db.String(100))
-    notes = db.Column(db.Text)
-
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
 
 
 with app.app_context():
@@ -115,33 +122,38 @@ def login():
 @jwt_required()
 def create_lead():
 
-    data = request.json
+    data = request.get_json()
 
-    user_id = get_jwt_identity()
+    budget = int(data["budget"]) if data.get("budget") else 0
+    data["budget"] = budget
 
     score, priority = calculate_lead_score(data)
+
+    current_user = get_jwt_identity()
+    
+    user_id = get_jwt_identity()
 
     new_lead = Lead(
         name=data["name"],
         email=data["email"],
         phone=data["phone"],
         intent=data["intent"],
-        budget=data.get("budget"),
-        timeline=data.get("timeline"),
+        budget=budget,
+        timeline=data["timeline"],
         score=score,
         priority=priority,
-        source=data.get("source"),
-        assigned_agent=data.get("assigned_agent"),
-        notes=data.get("notes"),
-        user_id=user_id
+        status="New",
+        user_id=current_user
     )
 
     db.session.add(new_lead)
     db.session.commit()
 
+    if priority == "Hot":
+        handle_hot_lead(new_lead)
+
     return jsonify({
         "message": "Lead created successfully",
-        "score": score,
         "priority": priority
     }), 201
 
@@ -149,22 +161,57 @@ def create_lead():
 # GET LEADS FOR LOGGED USER
 @app.route("/leads", methods=["GET"])
 @jwt_required()
-def get_user_leads():
+def get_leads():
 
     user_id = get_jwt_identity()
 
     leads = Lead.query.filter_by(user_id=user_id).all()
 
-    return jsonify([
-        {
+    result = []
+
+    for lead in leads:
+        result.append({
             "id": lead.id,
             "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "intent": lead.intent,
+            "budget": lead.budget,
+            "timeline": lead.timeline,
+            "score": lead.score,
             "priority": lead.priority,
             "status": lead.status
-        }
-        for lead in leads
-    ])
+        })
 
+    return jsonify(result)
+
+@app.route("/export")
+@jwt_required()
+def export_leads():
+
+    user_id = get_jwt_identity()
+
+    leads = Lead.query.filter_by(user_id=user_id).all()
+
+    data = []
+
+    for lead in leads:
+        data.append({
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "intent": lead.intent,
+            "budget": lead.budget,
+            "priority": lead.priority,
+            "status": lead.status
+        })
+
+    df = pd.DataFrame(data)
+
+    file = "leads.xlsx"
+    df.to_excel(file, index=False)
+
+    return send_file(file, as_attachment=True)
 
 # UPDATE LEAD
 @app.route("/leads/update/<int:id>", methods=["PATCH"])

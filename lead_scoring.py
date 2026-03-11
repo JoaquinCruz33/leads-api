@@ -1,4 +1,5 @@
 def calculate_lead_score(data):
+
     score = 0
 
     # Intent
@@ -9,17 +10,19 @@ def calculate_lead_score(data):
     elif data["intent"].lower() == "investor":
         score += 20
 
-    # Budget
-    budget = data.get("budget", 0)
-    if budget and budget > 500000:
+    # Budget (convertir a número)
+    budget = int(data.get("budget")) if data.get("budget") else 0
+
+    if budget > 500000:
         score += 30
-    elif budget and budget > 300000:
+    elif budget > 300000:
         score += 20
-    elif budget and budget > 150000:
+    elif budget > 150000:
         score += 10
 
     # Timeline
     timeline = data.get("timeline", "").lower()
+
     if timeline == "immediate":
         score += 30
     elif timeline == "1-3 months":
