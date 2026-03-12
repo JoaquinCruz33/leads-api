@@ -140,6 +140,12 @@ border-left:6px solid blue;
 
 <script>
 
+const token = localStorage.getItem("access_token")
+
+if(!token){
+window.location.href = "index.html"
+}
+
 let leadsData=[]
 let chart=null
 
