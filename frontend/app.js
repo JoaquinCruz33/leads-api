@@ -2,7 +2,7 @@ async function getLeads(){
 
 const token = localStorage.getItem("token")
 
-const res = await fetch("http://localhost:5000/leads",{
+const res = await fetch("https://real-estate-crm.onrender.com/leads",{
 
 headers:{
 "Authorization":"Bearer " + token

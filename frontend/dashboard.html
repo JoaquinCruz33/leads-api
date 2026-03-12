@@ -147,7 +147,7 @@ async function loadLeads(){
 
 const token=localStorage.getItem("access_token")
 
-const res=await fetch("http://localhost:5000/leads",{
+const res=await fetch("https://real-estate-crm.onrender.com/leads",{
 headers:{
 "Authorization":"Bearer "+token
 }
@@ -244,7 +244,7 @@ const leadId=data.replace("lead","")
 
 const token=localStorage.getItem("access_token")
 
-await fetch("http://localhost:5000/leads/update/"+leadId,{
+await fetch("https://real-estate-crm.onrender.com/leads/update/"+leadId,{
 method:"PATCH",
 headers:{
 "Content-Type":"application/json",
@@ -272,7 +272,7 @@ budget: parseInt(document.getElementById("budget").value),
 timeline: document.getElementById("timeline").value
 }
 
-const res = await fetch("http://localhost:5000/leads",{
+const res = await fetch("https://real-estate-crm.onrender.com/leads",{
 method:"POST",
 headers:{
 "Content-Type":"application/json",
@@ -336,7 +336,7 @@ function exportLeads(){
 
 const token = localStorage.getItem("access_token")
 
-window.open("http://localhost:5000/export?token="+token)
+window.open("https://real-estate-crm.onrender.com/export?token="+token)
 
 }
 
